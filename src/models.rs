@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque};
 
 #[derive(Debug, Clone, Default)]
 pub struct Process {
@@ -9,8 +9,8 @@ pub struct Process {
     pub waiting_time: f64,            // Total time spent waiting
     pub turnaround_time: f64,         // Completion time - arrival time
     pub completion_time: f64, // When process finishes
-    pub quantum: f64
-    //pub priority: Option<usize>,      // For priority-based scheduling
+    pub quantum: f64,
+    pub priority: i32
 }
 
 impl Process{
@@ -23,7 +23,8 @@ impl Process{
             waiting_time: 0.0,
             turnaround_time: 0.0,
             completion_time: 0.0,
-            quantum: 7.0 
+            quantum: 7.0,
+            priority: 0 
         }
     }
 }
@@ -319,5 +320,219 @@ impl<'a> CircularQueue<'a> {
     /// Returns `true` if the queue contains no processes.
     pub fn is_empty(&self) -> bool {
         self.dequeue.is_empty()
+    }
+}
+
+
+/// A priority queue implementation for CPU scheduling algorithms.
+/// 
+/// The `MaxHeap` maintains a collection of `Process` structs ordered by priority,
+/// where lower priority numbers indicate higher priority (e.g., priority 0 is
+/// higher than priority 5). This is a **non-standard** max-heap where "max"
+/// actually refers to the highest priority (lowest priority number).
+/// 
+/// # Type Parameters
+/// - The heap stores `Process` structs directly, requiring the `Clone` trait.
+/// 
+/// # Characteristics
+/// - **Non-traditional ordering**: Lower priority numbers = higher priority
+/// - **Linear search**: Operations use O(n) linear search rather than O(log n) heap operations
+/// - **Simple implementation**: Designed for educational purposes and small datasets
+/// 
+/// # Examples
+/// ```
+/// use scheduler::MaxHeap;
+/// use scheduler::Process;
+/// 
+/// let mut heap = MaxHeap::new(10);
+/// 
+/// // Create some processes
+/// let p1 = Process::new(1, 0.0, 5.0);
+/// let p2 = Process::new(2, 1.0, 3.0);
+/// 
+/// // Add processes to heap
+/// heap.push(p1);
+/// heap.push(p2);
+/// 
+/// // Check highest priority
+/// if let Some(priority) = heap.peek_highest_priority() {
+///     println!("Highest priority in queue: {}", priority);
+/// }
+/// 
+/// // Get highest priority process
+/// if let Some(process) = heap.pop_highest_priority() {
+///     println!("Executing process {} with priority {}", process.id, process.priority);
+/// }
+/// ```
+/// 
+/// # Performance
+/// - `push`: O(1) amortized
+/// - `pop_highest_priority`: O(n) where n is number of processes in heap
+/// - `peek_highest_priority`: O(n) where n is number of processes in heap
+/// - `is_empty`, `len`: O(1)
+pub struct MaxHeap {
+    /// Internal storage of processes.
+    /// 
+    /// Processes are stored in a `Vec<Process>` without any particular ordering.
+    /// When we need the highest priority process, we perform a linear search
+    /// to find the process with the lowest priority number.
+    processes: Vec<Process>,
+}
+
+impl MaxHeap {
+    /// Creates a new, empty `MaxHeap` with the specified capacity.
+    /// 
+    /// The heap will be able to hold at least `capacity` processes without
+    /// reallocating. If `capacity` is 0, the heap will not allocate.
+    /// 
+    /// # Arguments
+    /// * `capacity` - The initial capacity of the heap
+    /// 
+    /// # Examples
+    /// ```
+    /// let heap = MaxHeap::new(100);  // Can hold 100 processes without reallocation
+    /// ```
+    pub fn new(cap: usize) -> Self {
+        MaxHeap {
+            processes: Vec::with_capacity(cap),
+        }
+    }
+
+    /// Returns `true` if the heap contains no processes.
+    /// 
+    /// # Examples
+    /// ```
+    /// let mut heap = MaxHeap::new(10);
+    /// assert!(heap.is_empty());
+    /// 
+    /// heap.push(Process::new(1, 0.0, 5.0));
+    /// assert!(!heap.is_empty());
+    /// ```
+    pub fn is_empty(&self) -> bool {
+        self.processes.is_empty()
+    }
+
+    /// Returns the number of processes currently in the heap.
+    /// 
+    /// # Examples
+    /// ```
+    /// let mut heap = MaxHeap::new(10);
+    /// assert_eq!(heap.len(), 0);
+    /// 
+    /// heap.push(Process::new(1, 0.0, 5.0));
+    /// heap.push(Process::new(2, 1.0, 3.0));
+    /// assert_eq!(heap.len(), 2);
+    /// ```
+    pub fn len(&self) -> usize {
+        self.processes.len()
+    }
+
+    /// Returns the highest priority value in the heap without removing it.
+    /// 
+    /// Returns `None` if the heap is empty. Otherwise, returns `Some(priority)`
+    /// where `priority` is the **lowest priority number** (highest priority)
+    /// among all processes in the heap.
+    /// 
+    /// # Note
+    /// This operation performs a linear scan through all processes (O(n)).
+    /// 
+    /// # Examples
+    /// ```
+    /// let mut heap = MaxHeap::new(10);
+    /// 
+    /// let mut p1 = Process::new(1, 0.0, 5.0);
+    /// p1.priority = 3;
+    /// heap.push(p1);
+    /// 
+    /// let mut p2 = Process::new(2, 1.0, 3.0);
+    /// p2.priority = 1;  // Higher priority than p1
+    /// heap.push(p2);
+    /// 
+    /// assert_eq!(heap.peek_highest_priority(), Some(1));
+    /// ```
+    pub fn peek_highest_priority(&self) -> Option<i32> {
+        if self.is_empty() {
+            return None;
+        }
+        
+        let mut highest_priority = self.processes[0].priority;
+        for process in &self.processes {
+            if process.priority < highest_priority {
+                highest_priority = process.priority;
+            }
+        }
+        Some(highest_priority)
+    }
+
+    /// Removes and returns the process with the highest priority from the heap.
+    /// 
+    /// Returns `None` if the heap is empty. Otherwise, returns `Some(Process)`
+    /// where the returned process has the **lowest priority number** (highest
+    /// priority) among all processes in the heap.
+    /// 
+    /// If multiple processes share the same highest priority, one of them is
+    /// returned (implementation chooses based on order in the internal vector).
+    /// 
+    /// # Note
+    /// This operation performs a linear scan to find the highest priority
+    /// process (O(n)), then removes it from the vector (O(n) in worst case
+    /// when removing from the middle).
+    /// 
+    /// # Examples
+    /// ```
+    /// let mut heap = MaxHeap::new(10);
+    /// 
+    /// let mut p1 = Process::new(1, 0.0, 5.0);
+    /// p1.priority = 3;
+    /// heap.push(p1);
+    /// 
+    /// let mut p2 = Process::new(2, 1.0, 3.0);
+    /// p2.priority = 1;  // Higher priority than p1
+    /// heap.push(p2);
+    /// 
+    /// // This should return p2 since it has priority 1
+    /// let highest = heap.pop_highest_priority().unwrap();
+    /// assert_eq!(highest.id, 2);
+    /// assert_eq!(highest.priority, 1);
+    /// 
+    /// // Now only p1 remains
+    /// assert_eq!(heap.len(), 1);
+    /// ```
+    pub fn pop_highest_priority(&mut self) -> Option<Process> {
+        if self.is_empty() {
+            return None;
+        }
+        
+        // Find index of process with highest priority (lowest priority number)
+        let mut highest_idx = 0;
+        for i in 1..self.processes.len() {
+            if self.processes[i].priority < self.processes[highest_idx].priority {
+                highest_idx = i;
+            }
+        }
+        
+        Some(self.processes.remove(highest_idx))
+    }
+
+    /// Adds a process to the heap.
+    /// 
+    /// The process is added to the end of the internal vector. No ordering
+    /// is maintained during insertion; ordering is only considered when
+    /// calling `pop_highest_priority()`.
+    /// 
+    /// # Arguments
+    /// * `process` - The process to add to the heap
+    /// 
+    /// # Examples
+    /// ```
+    /// let mut heap = MaxHeap::new(10);
+    /// let process = Process::new(1, 0.0, 5.0);
+    /// 
+    /// heap.push(process);
+    /// assert_eq!(heap.len(), 1);
+    /// assert!(!heap.is_empty());
+    /// ```
+    pub fn push(&mut self, process: Process) {
+        self.processes.push(process);
     }
 }

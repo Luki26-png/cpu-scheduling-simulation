@@ -1,5 +1,5 @@
-use crate::models::{Process, MinHeap, CircularQueue};
-use rand_distr::{Distribution, Exp, Poisson};
+use crate::models::{Process, MinHeap, CircularQueue, MaxHeap};
+use rand_distr::{Distribution, Exp, Poisson, Uniform};
 use rand;
 /// Generates a vector of random numbers following a Poisson distribution.
 /// The Poisson distribution models the number of events occurring in a fixed 
@@ -59,6 +59,10 @@ pub fn generate_exp_sample(lambda:f64, n: usize) -> Vec<f64>{
         .take(n)
         .map(|value| (value * 100.0).ceil())
         .collect()
+}
+
+pub fn generate_priority(uniform: &Uniform<i32>)->i32{
+    uniform.sample(&mut rand::rng())
 }
 
 
@@ -361,6 +365,215 @@ pub fn round_robin_scheduling<'a>(processes: &'a mut Vec<Process>){
     }
 }
 
+/// Performs non-preemptive priority scheduling on a set of processes.
+/// 
+/// This algorithm schedules processes based on their priority, where **lower
+/// priority numbers indicate higher priority** (e.g., priority 0 is higher
+/// than priority 5). The scheduling is **non-preemptive**, meaning once a
+/// process starts executing, it runs to completion without interruption.
+/// 
+/// # Algorithm Overview
+/// 
+/// 1. **Initialization**: Assigns random priorities (0-15) to each process
+///    and sorts processes by arrival time.
+/// 2. **Ready Queue Management**: Maintains a ready queue of processes that
+///    have arrived but not yet executed, ordered by priority.
+/// 3. **Execution**: Always executes the highest priority process (lowest
+///    priority number) from the ready queue.
+/// 4. **Statistics Calculation**: Computes waiting time, turnaround time,
+///    and completion time for each process.
+/// 5. **Result Update**: Updates the original process structures with
+///    calculated statistics.
+/// 
+/// # Scheduling Characteristics
+/// 
+/// - **Non-preemptive**: No process interruption once started
+/// - **Priority-based**: Lower priority number = higher execution priority
+/// - **First-come tie-breaking**: Among processes with equal priority, the
+///   one that arrived earlier is executed first (due to arrival time sorting)
+/// - **Idle CPU**: CPU remains idle if no processes have arrived
+/// 
+/// # Parameters
+/// 
+/// * `processes` - A mutable reference to a vector of `Process` structs to be scheduled.
+///   Each process will be updated with its calculated statistics.
+/// 
+/// # Process Updates
+/// 
+/// After execution, each `Process` in the input vector will have the following
+/// fields updated:
+/// 
+/// - `priority`: Randomly assigned (0-15, lower = higher priority)
+/// - `waiting_time`: Time spent waiting in ready queue before execution
+/// - `turnaround_time`: Total time from arrival to completion
+/// - `completion_time`: Time when process finished execution
+/// - `remaining_time`: Set to 0.0 (process completed)
+/// 
+/// # Time Complexity
+/// 
+/// - O(n log n) for sorting processes by arrival time
+/// - O(n²) worst-case for priority queue operations (due to linear search in `MaxHeap`)
+/// - O(n²) for updating results (matching by process ID)
+/// 
+/// Where `n` is the number of processes.
+/// 
+/// # Memory Usage
+/// 
+/// - O(n) additional space for the ready queue
+/// - O(n) additional space for storing execution results
+/// 
+/// # Example
+/// 
+/// ```
+/// use scheduler::{priority_scheduling, Process};
+/// 
+/// // Create a list of processes with different arrival times and burst times
+/// let mut processes = vec![
+///     Process::new(1, 0.0, 5.0),   // Process 1: arrives at 0, needs 5 units
+///     Process::new(2, 1.0, 3.0),   // Process 2: arrives at 1, needs 3 units
+///     Process::new(3, 2.0, 8.0),   // Process 3: arrives at 2, needs 8 units
+/// ];
+/// 
+/// // Run priority scheduling
+/// priority_scheduling(&mut processes);
+/// 
+/// // Processes now contain scheduling statistics
+/// for process in &processes {
+///     println!("Process {}: priority={}, waiting={:.2}, turnaround={:.2}",
+///              process.id, process.priority, process.waiting_time, process.turnaround_time);
+/// }
+/// 
+/// // Calculate average statistics
+/// let avg_waiting: f64 = processes.iter().map(|p| p.waiting_time).sum::<f64>() / processes.len() as f64;
+/// let avg_turnaround: f64 = processes.iter().map(|p| p.turnaround_time).sum::<f64>() / processes.len() as f64;
+/// 
+/// println!("Average waiting time: {:.2}", avg_waiting);
+/// println!("Average turnaround time: {:.2}", avg_turnaround);
+/// ```
+/// 
+/// # Algorithm Details
+/// 
+/// ## Priority Assignment
+/// Each process is assigned a random priority between 0 and 15 (inclusive)
+/// using a uniform distribution. Priority 0 is the highest priority,
+/// priority 15 is the lowest.
+/// 
+/// ## Tie-breaking Rules
+/// 1. If multiple processes have the same priority, the one with earlier
+///    arrival time is executed first.
+/// 2. If arrival times are also equal, the process with lower ID is
+///    executed first (implicit due to initial sorting).
+/// 
+/// ## CPU Idle Time
+/// If no processes have arrived by the current time, the CPU idles until
+/// the next process arrival time.
+/// 
+/// ## Statistics Formulas
+/// - `waiting_time = start_time - arrival_time`
+/// - `turnaround_time = completion_time - arrival_time`
+/// - `completion_time = start_time + burst_time`
+/// 
+/// # Limitations
+/// 
+/// 1. **Non-preemptive**: Cannot handle cases where a high-priority process
+///    arrives while a lower-priority process is executing.
+/// 2. **Random priorities**: Priorities are randomly assigned each time the
+///    function is called, which may not be desirable for reproducible results.
+/// 3. **Performance**: Uses O(n²) operations due to linear search in `MaxHeap`.
+/// 
+/// # See Also
+/// 
+/// - [`Process`] - The process structure containing scheduling data
+/// - [`MaxHeap`] - The priority queue implementation used internally
+/// - [`priority_scheduling_preemptive`] - For a preemptive version of this algorithm
+/// 
+/// # Notes
+/// 
+/// - This function modifies the input vector in-place.
+/// - Process IDs must be unique for correct statistics assignment.
+/// - The random number generator uses thread-local randomness.
+/// - Floating-point comparisons use exact equality for arrival time checks.
+pub fn priority_scheduling(processes: &mut Vec<Process>) {
+    let n = processes.len();
+    if n == 0 {
+        return;
+    }
+    
+    // Generate random priorities between 0 and 15 (inclusive)
+    // Lower numbers indicate higher priority
+    let uniform = Uniform::new_inclusive(0, 15).unwrap();
+    for process in processes.iter_mut() {
+        process.priority = generate_priority(&uniform);
+        process.remaining_time = process.burst_time;
+    }
+    
+    // Sort processes by arrival time in ascending order
+    // Processes arriving earlier are considered first
+    processes.sort_by(|a, b| a.arrival_time.partial_cmp(&b.arrival_time).unwrap());
+    
+    // Initialize simulation time to the earliest arrival time
+    let mut current_time = processes[0].arrival_time;
+    let mut completed = 0;     // Number of processes that have finished execution
+    let mut i = 0;            // Index of next process to arrive
+    
+    // Create ready queue for processes that have arrived but not yet executed
+    let mut ready_queue = MaxHeap::new(n);
+    
+    // Temporary storage for execution results
+    // Stores tuples of (process_id, waiting_time, turnaround_time, completion_time)
+    let mut execution_results: Vec<(usize, f64, f64, f64)> = Vec::new();
+    
+    // Main scheduling loop: continues until all processes are completed
+    while completed < n {
+        // Add all processes that have arrived by the current time to ready queue
+        while i < n && processes[i].arrival_time <= current_time {
+            ready_queue.push(processes[i].clone());
+            i += 1;
+        }
+        
+        if !ready_queue.is_empty() {
+            // Execute the process with highest priority (lowest priority number)
+            let process = ready_queue.pop_highest_priority().unwrap();
+            
+            // Calculate scheduling statistics for this process
+            let waiting_time = current_time - process.arrival_time;
+            current_time += process.burst_time;
+            let completion_time = current_time;
+            let turnaround_time = completion_time - process.arrival_time;
+            
+            // Store results for later updating of original processes
+            execution_results.push((process.id, waiting_time, turnaround_time, completion_time));
+            completed += 1;
+            
+            // Check for any new processes that arrived during execution
+            while i < n && processes[i].arrival_time <= current_time {
+                ready_queue.push(processes[i].clone());
+                i += 1;
+            }
+        } else {
+            // Ready queue is empty: no processes have arrived yet
+            // Advance time to the next process arrival
+            if i < n {
+                current_time = processes[i].arrival_time;
+            }
+            // Note: if i >= n, all processes have arrived and loop will terminate
+        }
+    }
+    
+    // Update original process structures with calculated statistics
+    // This matches processes by their unique ID
+    for (id, waiting_time, turnaround_time, completion_time) in execution_results {
+        for process in processes.iter_mut() {
+            if process.id == id {
+                process.waiting_time = waiting_time;
+                process.turnaround_time = turnaround_time;
+                process.completion_time = completion_time;
+                process.remaining_time = 0.0; // Mark process as completed
+                break; // Found the process, move to next result
+            }
+        }
+    }
+}
 
 pub fn print_results(processes: &[Process]) {
     println!("\nProcess Execution Results:");

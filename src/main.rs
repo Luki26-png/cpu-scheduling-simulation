@@ -4,7 +4,7 @@ use models::Process;
 use algorithm::{generate_poisson_sample, generate_exp_sample};
 
 fn main() {
-    let number_of_process:usize = 8;
+    let number_of_process:usize = 30;
 
     let arrival_time = generate_poisson_sample(5.0, number_of_process);
     let burst_time = generate_exp_sample(5.0, number_of_process);
@@ -16,6 +16,7 @@ fn main() {
     }
 
     //algorithm::sjf_scheduling(&mut processes_list);
-    algorithm::round_robin_scheduling(&mut processes_list);
+    //algorithm::round_robin_scheduling(&mut processes_list);
+    algorithm::priority_scheduling(&mut processes_list);
     algorithm::print_results(&processes_list);
 }
