@@ -1,22 +1,20 @@
-pub mod models;
-pub mod algorithm;
-use models::Process;
-use algorithm::{generate_poisson_sample, generate_exp_sample};
+
+pub mod monte_carlo;
+use monte_carlo::{SchedulingAlgorithm, MonteCarlo};
 
 fn main() {
-    let number_of_process:usize = 30;
+    let round_robin_scheduling = MonteCarlo::new()
+        .set_num_of_iter(200)
+        .set_num_of_process(10)
+        .set_scheduling_algorithm(SchedulingAlgorithm::RoundRobin)
+        .run_simulation();
 
-    let arrival_time = generate_poisson_sample(5.0, number_of_process);
-    let burst_time = generate_exp_sample(5.0, number_of_process);
-
-    let mut processes_list: Vec<Process> = Vec::with_capacity(number_of_process);
-
-    for i in 0..number_of_process{
-        processes_list.push(Process::new(i, arrival_time[i], burst_time[i]));
+    if let Ok(sim_result) = round_robin_scheduling{
+        println!("Average waiting time: {}", sim_result.avg_waiting_time);
+        println!("Waiting Time Standdard Deviation: {}", sim_result.waiting_time_std);
+        println!("");
+        println!("Average Turn Around Time: {}", sim_result.avg_turn_around);
+        println!("Turn Around Time Standard Deviation: {}", sim_result.turn_around_std);
     }
 
-    //algorithm::sjf_scheduling(&mut processes_list);
-    //algorithm::round_robin_scheduling(&mut processes_list);
-    algorithm::priority_scheduling(&mut processes_list);
-    algorithm::print_results(&processes_list);
 }

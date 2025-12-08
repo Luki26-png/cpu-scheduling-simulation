@@ -1,4 +1,4 @@
-use crate::models::{Process, MinHeap, CircularQueue, MaxHeap};
+use crate::monte_carlo::models::{Process, MinHeap, CircularQueue, MaxHeap};
 use rand_distr::{Distribution, Exp, Poisson, Uniform};
 use rand;
 /// Generates a vector of random numbers following a Poisson distribution.
@@ -141,8 +141,8 @@ pub fn sjf_scheduling(processes: &mut Vec<Process>) {
     let mut current_process: Option<Process> = None;
     let mut i = 0; // Index for processes not yet arrived
     
-    println!("Preemptive SJF Scheduling:");
-    println!("Time\tProcess\tAction");
+    //println!("Preemptive SJF Scheduling:");
+    //println!("Time\tProcess\tAction");
 
     while completed < n {
         // Add all processes that have arrived by current_time to ready queue
@@ -152,7 +152,7 @@ pub fn sjf_scheduling(processes: &mut Vec<Process>) {
                 processes[i].arrival_time, 
                 processes[i].burst_time
             ));
-            println!("{:.2}\tP{}\tArrived", current_time, processes[i].id);
+            //println!("{:.2}\tP{}\tArrived", current_time, processes[i].id);
             i += 1;
         }
 
@@ -162,7 +162,7 @@ pub fn sjf_scheduling(processes: &mut Vec<Process>) {
                 if next_process.remaining_time < current.remaining_time {
                     // Preempt current process - move it back to ready queue
                     ready_queue.push(current.clone());
-                    println!("{:.2}\tP{}\tPreempted", current_time, current.id);
+                    //println!("{:.2}\tP{}\tPreempted", current_time, current.id);
                     current_process = None;
                 }
             }
@@ -175,7 +175,7 @@ pub fn sjf_scheduling(processes: &mut Vec<Process>) {
             });
 
             if let Some(process) = popped {
-                println!("{:.2}\tP{}\tStarted", current_time, process.id);
+                //println!("{:.2}\tP{}\tStarted", current_time, process.id);
                 current_process = Some(process);
             }
         }
@@ -213,7 +213,7 @@ pub fn sjf_scheduling(processes: &mut Vec<Process>) {
                     original_process.waiting_time = current.waiting_time;
                 }
                 
-                println!("{:.2}\tP{}\tCompleted", current_time, current.id);
+                //println!("{:.2}\tP{}\tCompleted", current_time, current.id);
                 completed += 1;
                 current_process = None;
             }
