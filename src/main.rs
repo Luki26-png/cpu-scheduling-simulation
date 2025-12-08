@@ -1,20 +1,25 @@
 
 pub mod monte_carlo;
-use monte_carlo::{SchedulingAlgorithm, MonteCarlo};
+use monte_carlo::{MonteCarlo};
 
 fn main() {
-    let round_robin_scheduling = MonteCarlo::new()
+    let monte_carlo_simulation = MonteCarlo::new()
         .set_num_of_iter(200)
-        .set_num_of_process(10)
-        .set_scheduling_algorithm(SchedulingAlgorithm::RoundRobin)
+        .set_num_of_process(15)
         .run_simulation();
 
-    if let Ok(sim_result) = round_robin_scheduling{
-        println!("Average waiting time: {}", sim_result.avg_waiting_time);
-        println!("Waiting Time Standdard Deviation: {}", sim_result.waiting_time_std);
+    if let Ok(sim_result) = monte_carlo_simulation{
+        println!("Round Robin Result");
+        println!("{:?}", sim_result.round_robin_stats);
         println!("");
-        println!("Average Turn Around Time: {}", sim_result.avg_turn_around);
-        println!("Turn Around Time Standard Deviation: {}", sim_result.turn_around_std);
+
+        println!("SJF Result");
+        println!("{:?}", sim_result.sjf_stats);
+        println!("");
+
+        println!("Priority Result");
+        println!("{:?}", sim_result.priority_stats);
+        
     }
 
 }

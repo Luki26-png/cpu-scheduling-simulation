@@ -10,25 +10,57 @@ use algorithm::{
 };
 
 use models::Process;
-pub enum SchedulingAlgorithm {
-    ShortestJobFirst,
-    Priority,
-    RoundRobin,
-    None
+
+#[derive(Default, Debug)]
+pub struct MonteCarloStats{
+    pub avg_turn_around: f64,
+    pub avg_waiting_time: f64,
+    pub turn_around_std: f64,
+    pub waiting_time_std: f64      
+}
+
+impl MonteCarloStats{
+    pub fn calculate_stats(&mut self, monte_carlo_result: &Vec<(f64, f64)>){
+        let result_length = monte_carlo_result.len();
+        //calculate the Overall average of turnaround time and waiting time
+        for (turnaround, waiting) in monte_carlo_result{
+            self.avg_turn_around += turnaround;
+            self.avg_waiting_time += waiting;
+        }
+
+        self.avg_turn_around /= result_length as f64;
+        self.avg_waiting_time /= result_length as f64;
+
+        //calculate the standard deviation
+        //calculate each different to the mean
+        for (turnaround, waiting) in monte_carlo_result{
+            self.turn_around_std = (self.turn_around_std + self.avg_turn_around - turnaround).abs();
+            self.waiting_time_std = (self.waiting_time_std + self.avg_waiting_time - waiting).abs();
+        }
+
+        //divide with total element to get the variant
+        self.turn_around_std /= result_length as f64;
+        self.waiting_time_std /= result_length as f64;
+
+        //get standard deviation from the variant by taking its square root
+        self.turn_around_std = self.turn_around_std.sqrt();
+        self.waiting_time_std = self.waiting_time_std.sqrt();
+    }
 }
 
 pub struct MonteCarlo{
     number_of_process: usize,
     number_of_iteration: usize,
-    algorithm: SchedulingAlgorithm,
 
     //vector that will store statistic for each iteration in a tuple: (turn around, waiting time), 
-    each_iter_result: Vec<(f64,f64)>,
+    each_iter_result_round_robin: Vec<(f64,f64)>,
+    each_iter_result_sjf: Vec<(f64,f64)>,
+    each_iter_result_priority: Vec<(f64,f64)>,
+
     //variable to store the overall stats
-    pub avg_turn_around: f64,
-    pub avg_waiting_time: f64,
-    pub turn_around_std: f64,
-    pub waiting_time_std: f64
+    pub round_robin_stats: MonteCarloStats,
+    pub priority_stats: MonteCarloStats,
+    pub sjf_stats: MonteCarloStats
 }
 
 impl MonteCarlo{
@@ -36,12 +68,12 @@ impl MonteCarlo{
         Self {
             number_of_process: 0, 
             number_of_iteration: 0,
-            algorithm: SchedulingAlgorithm::None,
-            each_iter_result: Vec::new(),
-            avg_turn_around: 0.0,
-            avg_waiting_time: 0.0,
-            turn_around_std: 0.0,
-            waiting_time_std: 0.0 
+            each_iter_result_round_robin: Vec::new(),
+            each_iter_result_priority: Vec::new(),
+            each_iter_result_sjf: Vec::new(),
+            round_robin_stats: MonteCarloStats::default(),
+            priority_stats: MonteCarloStats::default(),
+            sjf_stats: MonteCarloStats::default()
         }
     }
 
@@ -52,12 +84,9 @@ impl MonteCarlo{
 
     pub fn set_num_of_iter(mut self, num_iter: usize)->Self{
         self.number_of_iteration = num_iter;
-        self.each_iter_result = Vec::with_capacity(num_iter);
-        self
-    }
-
-    pub fn set_scheduling_algorithm(mut self, algorithm: SchedulingAlgorithm)->Self{
-        self.algorithm = algorithm;
+        self.each_iter_result_round_robin = Vec::with_capacity(num_iter);
+        self.each_iter_result_priority = Vec::with_capacity(num_iter);
+        self.each_iter_result_sjf = Vec::with_capacity(num_iter);
         self
     }
 
@@ -77,57 +106,71 @@ impl MonteCarlo{
 
         //start the monte carlo simulation
         for _ in 0..self.number_of_iteration{
-          //create random arrival time
-          let arrival_time = generate_poisson_sample(5.0, self.number_of_process);
+            //create random arrival time
+            let arrival_time = generate_poisson_sample(5.0, self.number_of_process);
 
-          //create random burst time
-          let burst_time = generate_exp_sample(5.0, self.number_of_process);
+            //create random burst time
+            let burst_time = generate_exp_sample(5.0, self.number_of_process);
 
-          //turn them into a vector
-          let mut processes_list: Vec<Process> = Vec::with_capacity(self.number_of_process);
-          for i in 0..self.number_of_process{
-            processes_list.push(Process::new(i, arrival_time[i], burst_time[i]));
-          }  
+            //process list for round robin
+            let mut processes_list_rr: Vec<Process> = Vec::with_capacity(self.number_of_process);
 
-          //put then insto scheduling algorithm
-          match self.algorithm{
-            SchedulingAlgorithm::Priority=> priority_scheduling(&mut processes_list),
-            SchedulingAlgorithm::ShortestJobFirst=>sjf_scheduling(&mut processes_list),
-            SchedulingAlgorithm::RoundRobin=>round_robin_scheduling(&mut processes_list),
-            _ => return Err(String::from("Please set the scheduling algorithm that will be used"))
-          };
+            //process lsit for priority
+            let mut processes_list_priority: Vec<Process> = Vec::with_capacity(self.number_of_process);
+            //process list for sjf
+            let mut processes_list_sjf: Vec<Process> = Vec::with_capacity(self.number_of_process);
 
-          //for the current iteration result,
-          //push the turn around time and waiting time into each_iter_result: Vec<(f64,f64)>,
-          for process in processes_list{
-            self.each_iter_result.push((process.turnaround_time, process.waiting_time));
-          }
+            //put randomized arrival time and burst time, into vecotr
+            for i in 0..self.number_of_process{
+                processes_list_rr.push(Process::new(i, arrival_time[i], burst_time[i]));
+                processes_list_priority.push(Process::new(i, arrival_time[i], burst_time[i]));
+                processes_list_sjf.push(Process::new(i, arrival_time[i], burst_time[i]));
+            }
+
+            //put them insto scheduling algorithm
+            round_robin_scheduling(&mut processes_list_rr);
+            priority_scheduling(&mut processes_list_priority);
+            sjf_scheduling(&mut processes_list_sjf);
+
+            //for the current iteration cycle result,
+            //calculate the average turn around and waiting time
+            let mut curr_rr_result = (0.0, 0.0);//(turn around, waiting)
+            let mut curr_priority_result = (0.0, 0.0);
+            let mut curr_sjf_result = (0.0, 0.0);
+
+            //calculate for the round robin
+            for process in processes_list_rr{
+                curr_rr_result.0 += process.turnaround_time;
+                curr_rr_result.1 += process.waiting_time;
+            }
+            curr_rr_result.0 /= self.number_of_process as f64;
+            curr_rr_result.1 /= self.number_of_process as f64;
+
+            //calculate for the priority
+            for process in processes_list_priority{
+                curr_priority_result.0 += process.turnaround_time;
+                curr_priority_result.1 += process.waiting_time;
+            }
+            curr_priority_result.0 /= self.number_of_process as f64;
+            curr_priority_result.1 /= self.number_of_process as f64;
+
+            //calculate for the shorted job first
+            for process in processes_list_sjf{
+                curr_sjf_result.0 += process.turnaround_time;
+                curr_sjf_result.1 += process.waiting_time;
+            }
+            curr_sjf_result.0 /= self.number_of_process as f64;
+            curr_sjf_result.1 /= self.number_of_process as f64;
+
+            //push the result into corresponding iteration result container
+            self.each_iter_result_round_robin.push(curr_rr_result);
+            self.each_iter_result_priority.push(curr_priority_result);
+            self.each_iter_result_sjf.push(curr_sjf_result);
         }
 
-        //calculate the Overall average of turnaround time and waiting time
-        for (turnaround, waiting) in &self.each_iter_result{
-            self.avg_turn_around += turnaround;
-            self.avg_waiting_time += waiting;
-        }
-
-        self.avg_turn_around /= self.number_of_iteration as f64;
-        self.avg_waiting_time /= self.number_of_iteration as f64;
-
-        //calculate the standard deviation
-
-        //calculate each different to the mean
-        for (turnaround, waiting) in &self.each_iter_result{
-            self.turn_around_std = (self.turn_around_std + self.avg_turn_around - turnaround).abs();
-            self.waiting_time_std = (self.waiting_time_std + self.avg_waiting_time - waiting).abs();
-        }
-
-        //divide with total element to get the variant
-        self.turn_around_std /= self.number_of_iteration as f64;
-        self.waiting_time_std /= self.number_of_iteration as f64;
-
-        //get standard deviation from the variant by taking its square root
-        self.turn_around_std = self.turn_around_std.sqrt();
-        self.waiting_time_std = self.waiting_time_std.sqrt();
+        self.round_robin_stats.calculate_stats(&self.each_iter_result_round_robin);
+        self.priority_stats.calculate_stats(&self.each_iter_result_priority);
+        self.sjf_stats.calculate_stats(&self.each_iter_result_sjf);
 
         Ok(self)
     }
