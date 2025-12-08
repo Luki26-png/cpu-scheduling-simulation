@@ -45,12 +45,24 @@ impl MonteCarloStats{
         //get standard deviation from the variant by taking its square root
         self.turn_around_std = self.turn_around_std.sqrt();
         self.waiting_time_std = self.waiting_time_std.sqrt();
+
+        //round each stat so that it only show 3 digit after decimal
+        self.avg_turn_around = self.round_to_decimals(self.avg_turn_around, 3);
+        self.avg_waiting_time = self.round_to_decimals(self.avg_waiting_time, 3);
+        self.turn_around_std = self.round_to_decimals(self.turn_around_std, 3);
+        self.waiting_time_std = self.round_to_decimals(self.waiting_time_std, 3);
+    }
+
+    //Round to N decimals
+    pub fn round_to_decimals(&self, x: f64, decimals: u32) -> f64 {
+        let factor = 10_f64.powi(decimals as i32);
+        (x * factor).round() / factor
     }
 }
 
 pub struct MonteCarlo{
-    number_of_process: usize,
-    number_of_iteration: usize,
+    pub number_of_process: usize,
+    pub number_of_iteration: usize,
 
     //vector that will store statistic for each iteration in a tuple: (turn around, waiting time), 
     each_iter_result_round_robin: Vec<(f64,f64)>,
